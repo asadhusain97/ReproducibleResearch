@@ -1,0 +1,153 @@
+---
+title: "Data Analysis on Activity Dataset"
+author: "Asad Husain"
+date: "25/03/2020"
+output: html_document
+---
+
+Welcome to this data analysis report!
+I have made this report so as to analyse the data on the activity dataset as intructed in the week 2 peer graded assignment of Reproducible Research course on Coursera.
+Enjoy.
+
+## Loading relevant libraries
+
+```{r Libraries}
+options(warn = -1)
+library(dplyr)
+library(ggplot2)
+```
+
+## Loading and Pre-Processing the data
+
+Set the working directory according to your file manager. I have stored the data in a aptly named variable called `act`. 
+
+```{r Reading the file}
+#setwd("..\redata_data_activity")
+act <- read.csv("activity.csv")
+act <- tbl_df(act)
+act_na <- na.omit(act)
+```
+
+```{r Getting to know}
+dim(act)
+str(act)
+summary(act)
+```
+
+As we can see that the second column contains dates but is formatted as factor variable. We should change that to Date format using mutate command from dplyr library.
+
+```{r Transforming the data}
+act <- act %>% 
+        mutate(date = as.Date(date, "%Y-%m-%d"))
+```
+
+## Mean of Steps
+
+```{r Total steps taken per day}
+by_date <- act_na %>% 
+        group_by(date)
+by_date_steps <- by_date %>%
+        summarise(Steps_sum = sum(steps))
+by_date_steps
+```
+
+```{r Histogram}
+hist(by_date_steps$Steps_sum, main = "Total steps per day", xlab = "No. of Steps", col = "Steelblue")
+```
+
+```{r Mean and Median}
+mean_steps <- as.integer(mean(by_date_steps$Steps_sum))
+median_steps <- median(by_date_steps$Steps_sum)
+```
+
+* Mean of Total steps taken per day comes out to be **`r mean_steps`**.
+
+* Median of Total steps taken per day comes out to be **`r median_steps`**.
+
+## Average Daily Activity Pattern
+
+```{r TimeSeries by interval}
+by_interval <- act_na %>% 
+        group_by(interval)
+by_interval_steps <- by_interval %>%
+        summarise(Steps_mean = mean(steps))
+by_interval_steps
+
+tsplot1 <- ggplot(data = by_interval_steps, aes(x = interval, y= Steps_mean))
+tsplot1 + geom_line(col = "steelblue", lwd = 1)
+```
+
+```{r Max Steps in 1 interval}
+filter(by_interval_steps, Steps_mean == max(Steps_mean))
+```
+
+As we can see, the 167^th^ 5-minute interval records the maximum number of steps accross all days in average, i.e. **206**. The 167^th^ interval is the interval between **1:55 PM to 2:00 PM**. 
+
+## Imputing Missing Values
+
+```{r Counting NAs}
+tot_na <- sum(is.na(act$steps))
+```
+
+The total number of rows with NA is **`r tot_na`**.
+
+```{r Imputing NAs}
+#Filling the mean steps taken in that 5-minute intervals to replace NAs
+act_new <- act
+for (i in 1:nrow(act_new)){
+        p <- filter(by_interval_steps, interval == as.integer(act_new[i,3]))
+        if(is.na(act_new[i,1]))
+        act_new[i, 1] <- as.integer(p[, 2])
+}
+```
+
+```{r New Mean and Median}
+by_date_new <- act_new %>% 
+        group_by(date) %>%
+        summarise(Steps_sum = sum(steps))
+        
+hist(by_date_new$Steps_sum, main = "Total steps per day", xlab = "No. of Steps", col = "Steelblue")
+
+mean_steps_new <- as.integer(mean(by_date_new$Steps_sum))
+median_steps_new <- median(by_date_new$Steps_sum)
+```
+
+* Mean of Total steps taken per day comes out to be **`r mean_steps_new`**.
+
+* Median of Total steps taken per day comes out to be **`r median_steps_new`**.
+
+**YES!** Mean and Median have changed after replacing the NAs in the dataset. The mean of the dataset has slightly decreased by *17 step* and the median of the dataset has decreased by *124 steps*.
+The decrease in the estimates was expected as the denominator *(the number of row)* increased by 2304 *(the number of NA rows)* but the numerator *(steps)* did not increase in that scale.
+
+## Comparing Weekdays and Weekends
+
+```{r Categorising in weekday and weekend}
+act_new <- act_new %>%
+        mutate(day = weekdays(date))
+
+for (i in 1:nrow(act_new)){
+        if(act_new$day[i] %in% c("Sunday", "Saturday"))
+                act_new[i, 4] <- "weekend"
+        else(act_new[i, 4] <- "weekday")
+}
+act_new$day <- as.factor(act_new$day)
+```
+
+```{r Making the Panel Plot}
+by_interval_new_wday <- act_new %>% 
+        filter(day == "weekday") %>%
+        group_by(interval) %>%
+        summarise(Steps_mean = mean(steps))
+by_interval_new_wend <- act_new %>% 
+        filter(day == "weekend") %>%
+        group_by(interval) %>%
+        summarise(Steps_mean = mean(steps))
+
+par(mfrow = c(1,2))
+plot(by_interval_new_wday, type = "l", col = "steelblue", lwd = 2, xlab = "5-minute intervals in WEEKDAYS")
+plot(by_interval_new_wend, type = "l", col = "steelblue", lwd = 2, xlab = "5-minute intervals in WEEKENDS")
+```
+
+It can be clearly inferred from the panel plot that activity during weekend evenings is higher when compared to weekdays since during weekends avg. steps taken increase in the later part of the day when compared to weekdays. 
+
+# The End! Thanks a lot!
